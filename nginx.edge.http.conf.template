@@ -1,6 +1,10 @@
-# nginx configuration for HLS CDN edge server with browser protection
+# nginx configuration for HLS CDN edge server with browser protection and JWT token authentication
 # SSL termination happens at the load balancer (443 -> 80)
 # This configuration only handles HTTP traffic from the load balancer
+
+# Load Lua modules for JWT token validation
+lua_package_path "/usr/local/openresty/lualib/?.lua;;";
+lua_shared_dict jwt_cache 10m;
 
 # Proxy cache configuration
 proxy_cache_path /data/nginx-cache levels=1:2 keys_zone=srs_cache:8m max_size=1000m inactive=600m;
@@ -43,14 +47,34 @@ server {
             return 403;
         }
         
+        # Validate JWT token
+        access_by_lua_block {
+            local token_auth = require "token_auth"
+            token_auth.validate_token()
+        }
+        
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass http://${ORYX_SERVER}$request_uri;
 
+        # Modify m3u8 content to append token to segment URLs
+        body_filter_by_lua_block {
+            local token_auth = require "token_auth"
+            local args = ngx.req.get_uri_args()
+            local token = args["token"]
+            
+            if token and ngx.arg[1] then
+                -- Replace .ts references with .ts?token=xxx
+                local body = ngx.arg[1]
+                body = string.gsub(body, "([^/\n]+%.ts)", "%1?token=" .. token)
+                ngx.arg[1] = body
+            end
+        }
+
         proxy_cache srs_cache;
-        proxy_cache_key $scheme$proxy_host$uri$args;
+        proxy_cache_key $scheme$proxy_host$uri;
         proxy_cache_valid 200 302 ${SRS_M3U8_EXPIRE}s;
 
         # Remove existing CORS headers from upstream
@@ -84,6 +108,12 @@ server {
         # Block non-browser requests
         if ($block_non_browser) {
             return 403;
+        }
+        
+        # Validate JWT token
+        access_by_lua_block {
+            local token_auth = require "token_auth"
+            token_auth.validate_token()
         }
         
         proxy_set_header Host $host;
