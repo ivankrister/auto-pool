@@ -12,9 +12,10 @@ services:
     ports:
       - "80:80"
     environment:
-      - ORYX_SERVER=10.104.0.3:80
-      - SRS_M3U8_EXPIRE=10
-      - SRS_TS_EXPIRE=3600
+      - ORYX_SERVER=${ORYX_SERVER}
+      - VIDEO_JWT_SECRET=${VIDEO_JWT_SECRET}
+      - SRS_M3U8_EXPIRE=${SRS_M3U8_EXPIRE}
+      - SRS_TS_EXPIRE=${SRS_TS_EXPIRE}
     volumes:
       - ./logs:/var/log/nginx
       - ./cache:/data/nginx-cache
