@@ -36,10 +36,10 @@ function _M.validate_token()
     
     local payload = jwt_obj.payload
     
-    -- Check if token has expired (using Asia/Manila timezone)
-    local current_time = ngx.time() + (8 * 3600) -- Add 8 hours for Asia/Manila (UTC+8)
+    -- Check if token has expired (using UTC)
+    local current_time = ngx.time() -- UTC timestamp
     if payload.exp and current_time > payload.exp then
-        ngx.log(ngx.ERR, "Token has expired")
+        ngx.log(ngx.ERR, "Token has expired. Current: " .. current_time .. ", Expires: " .. (payload.exp or "nil"))
         ngx.status = 403
         ngx.say("Access denied: Token expired")
         ngx.exit(403)

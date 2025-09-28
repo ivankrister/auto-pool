@@ -19,11 +19,15 @@ class HLSTokenService
      */
     public function generateToken(int $userId, string $videoId, Request $request, int $expirationMinutes = 60): string
     {
+        // Force UTC timestamps for JWT tokens (nginx validation uses UTC)
+        $now = gmdate('U'); // UTC timestamp
+        $expiration = $now + ($expirationMinutes * 60);
+        
         $payload = [
             'sub' => $userId,                              // Subject (user ID)
             'video_id' => $videoId,                        // Video identifier
-            'iat' => time(),                              // Issued at
-            'exp' => time() + ($expirationMinutes * 60),  // Expires
+            'iat' => (int) $now,                          // Issued at (UTC)
+            'exp' => (int) $expiration,                   // Expires (UTC)
             'jti' => uniqid('hls_', true),                // Unique token ID
             'ip' => $request->ip(),                       // Bind to client IP
             'userAgent' => $request->userAgent(),         // User agent

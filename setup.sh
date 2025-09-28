@@ -12,10 +12,7 @@ if [ ! -f .env ]; then
     echo ""
     echo "⚠️  IMPORTANT: Please edit the .env file and set your actual values:"
     echo "   - ORYX_SERVER: Your streaming server address"
-    echo "   - VIDEO_JWT_SECRET: A secure random secret key"
-    echo ""
-    echo "💡 To generate a secure JWT secret, you can use:"
-    echo "   openssl rand -base64 32"
+    echo "   - VIDEO_JWT_SECRET: Use the same secret from your Laravel app"
     echo ""
 else
     echo "⚠️  .env file already exists. Skipping creation."
