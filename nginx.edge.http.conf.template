@@ -1,0 +1,139 @@
+# nginx configuration for HLS CDN edge server with browser protection
+# SSL termination happens at the load balancer (443 -> 80)
+# This configuration only handles HTTP traffic from the load balancer
+
+# Proxy cache configuration
+proxy_cache_path /data/nginx-cache levels=1:2 keys_zone=srs_cache:8m max_size=1000m inactive=600m;
+proxy_temp_path /data/nginx-cache/tmp;
+
+# Map to block non-browser requests
+map $http_user_agent $block_non_browser {
+    default          1;  # Block by default
+    "~*Mozilla"      0;  # Allow browsers with "Mozilla" in the User-Agent
+    "~*Chrome"       0;  # Allow browsers with "Chrome" in the User-Agent
+    "~*Safari"       0;  # Allow browsers with "Safari" in the User-Agent
+    "~*Opera"        0;  # Allow browsers with "Opera" in the User-Agent
+    "~*Edge"         0;  # Allow browsers with "Edge" in the User-Agent
+    "~*Android"      0;  # Allow Android default browser
+    "~*kube-probe"   0;  # Allow Kubernetes health probes
+}
+
+# HTTP server - handles traffic from load balancer (SSL terminated at LB)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name apl-1.quantumatic.live;
+
+    proxy_cache_valid 404 10s;
+    proxy_cache_lock on;
+    proxy_cache_lock_age 300s;
+    proxy_cache_lock_timeout 300s;
+    proxy_cache_min_uses 1;
+
+    # Health check endpoint - allow for load balancer health checks
+    location /health {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'OK\n';
+    }
+
+    # HLS m3u8 files - cache with short expiration
+    location ~ /.+/.*\.(m3u8)$ {
+        # Block non-browser requests
+        if ($block_non_browser) {
+            return 403;
+        }
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://${ORYX_SERVER}$request_uri;
+
+        proxy_cache srs_cache;
+        proxy_cache_key $scheme$proxy_host$uri$args;
+        proxy_cache_valid 200 302 ${SRS_M3U8_EXPIRE}s;
+
+        # Remove existing CORS headers from upstream
+        proxy_hide_header Access-Control-Allow-Credentials;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Expose-Headers;
+
+        # Add our own CORS headers
+        add_header Access-Control-Allow-Origin "*";
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
+        add_header 'Access-Control-Allow-Headers' 'Range';
+        add_header Accept-Ranges bytes;
+        add_header X-Cache-Status $upstream_cache_status;
+
+        # Handle CORS preflight requests
+        if ($request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, HEAD, OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'Range';
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain; charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+    }
+
+    # HLS TS segments - cache with longer expiration
+    location ~ /.+/.*\.(ts)$ {
+        # Block non-browser requests
+        if ($block_non_browser) {
+            return 403;
+        }
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://${ORYX_SERVER}$request_uri;
+
+        proxy_cache srs_cache;
+        proxy_cache_key $scheme$proxy_host$uri;
+        proxy_cache_valid 200 302 ${SRS_TS_EXPIRE}s;
+
+        # Remove existing CORS headers from upstream
+        proxy_hide_header Access-Control-Allow-Credentials;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Expose-Headers;
+
+        # Add our own CORS headers
+        add_header Access-Control-Allow-Origin "*";
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
+        add_header 'Access-Control-Allow-Headers' 'Range';
+        add_header Accept-Ranges bytes;
+        add_header X-Cache-Status $upstream_cache_status;
+
+        # Handle CORS preflight requests
+        if ($request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, HEAD, OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'Range';
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain; charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+    }
+
+    # Default location for any other requests
+    location / {
+        # Block non-browser requests
+        if ($block_non_browser) {
+            return 403;
+        }
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://${ORYX_SERVER}$request_uri;
+    }
+}

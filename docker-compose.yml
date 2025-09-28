@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  autopool-nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ARCH: ""  # Leave blank for default architecture, or set to "arm64v8/" for ARM64
+    container_name: autopool-nginx
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - ORYX_SERVER=10.104.0.3:80
+      - SRS_M3U8_EXPIRE=10
+      - SRS_TS_EXPIRE=3600
+    volumes:
+      - ./logs:/var/log/nginx
+      - ./cache:/data/nginx-cache
+      - ./cache/tmp:/data/nginx-cache/tmp
+    networks:
+      - autopool_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  autopool_network:
+    driver: bridge
