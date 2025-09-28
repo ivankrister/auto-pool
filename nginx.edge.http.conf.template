@@ -20,9 +20,8 @@ map $http_user_agent $block_non_browser {
 
 # HTTP server - handles traffic from load balancer (SSL terminated at LB)
 server {
-    listen 80;
-    listen [::]:80;
-    server_name apl-1.quantumatic.live;
+    listen 80 default_server;
+    listen [::]:80 default_server;
 
     proxy_cache_valid 404 10s;
     proxy_cache_lock on;
