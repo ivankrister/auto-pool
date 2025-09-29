@@ -10,7 +10,7 @@ services:
     container_name: autopool-nginx
     restart: always
     ports:
-      - "8080:80"
+      - "80:80"
     environment:
       - ORYX_SERVER=${ORYX_SERVER}
       - VIDEO_JWT_SECRET=${VIDEO_JWT_SECRET}
