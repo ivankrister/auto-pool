@@ -85,8 +85,7 @@ function _M.validate_token()
         ngx.exit(403)
     end
     
-    -- Token is valid
-    ngx.log(ngx.INFO, "JWT token validation successful, path: " .. path .. ", Real IP: " .. client_ip)
+
 end
 
 
