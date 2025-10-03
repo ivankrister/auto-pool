@@ -26,8 +26,10 @@ RUN apk add --no-cache gettext
 ADD nginx.edge.http.conf.template /tmp/nginx.template
 ADD token_auth.lua /usr/local/openresty/lualib/token_auth.lua
 
-# Create the proxy cache directory for NGINX.
-RUN mkdir -p /data/nginx-cache
+# Create the proxy cache directory for NGINX with proper permissions.
+RUN mkdir -p /data/nginx-cache /data/nginx-cache/tmp && \
+    chown -R nobody:nogroup /data/nginx-cache && \
+    chmod -R 755 /data/nginx-cache
 
 # Create a complete nginx.conf with our configuration
 RUN echo 'worker_processes auto;' > /usr/local/openresty/nginx/conf/nginx.conf && \
@@ -44,6 +46,10 @@ RUN echo 'worker_processes auto;' > /usr/local/openresty/nginx/conf/nginx.conf &
 
 # Add startup script
 RUN echo '#!/bin/sh' > /start.sh && \
+    echo '# Ensure cache directory permissions are correct' >> /start.sh && \
+    echo 'mkdir -p /data/nginx-cache /data/nginx-cache/tmp' >> /start.sh && \
+    echo 'chown -R nobody:nogroup /data/nginx-cache' >> /start.sh && \
+    echo 'chmod -R 755 /data/nginx-cache' >> /start.sh && \
     echo 'envsubst "\$ORYX_SERVER \$SRS_M3U8_EXPIRE \$SRS_TS_EXPIRE" < /tmp/nginx.template > /etc/nginx/conf.d/default.conf' >> /start.sh && \
     echo 'exec /usr/local/openresty/bin/openresty -g "daemon off;"' >> /start.sh && \
     chmod +x /start.sh

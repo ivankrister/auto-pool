@@ -72,18 +72,6 @@ function _M.validate_token()
         ngx.exit(403)
     end
 
-
-    -- IP binding validation - ensure token is used from the same IP it was issued for
-    if payload.ip and payload.ip ~= client_ip then
-        ngx.log(ngx.ERR, "IP address mismatch. Token IP: " .. (payload.ip or "nil") .. ", Client IP: " .. client_ip .. 
-                ", CF-IP: " .. (ngx.var.http_cf_connecting_ip or "none") .. 
-                ", X-Real-IP: " .. (ngx.var.http_x_real_ip or "none") .. 
-                ", X-Forwarded-For: " .. (ngx.var.http_x_forwarded_for or "none") .. 
-                ", Remote: " .. ngx.var.remote_addr)
-        ngx.status = 403
-        ngx.say("Access denied: IP address mismatch")
-        ngx.exit(403)
-    end
     
 
 end
