@@ -9,6 +9,10 @@ local _M = {}
 -- Configuration - JWT secret should match your Laravel app's video_jwt_secret
 local JWT_SECRET = os.getenv("VIDEO_JWT_SECRET") or "your-laravel-jwt-secret"
 
+-- Cache configuration
+local JWT_CACHE_TTL = 600 -- 10 minutes in seconds
+local jwt_cache = ngx.shared.jwt_cache
+
 -- Function to get real client IP (handles Cloudflare and other proxies)
 local function get_real_client_ip()
     -- Cloudflare provides the real client IP in CF-Connecting-IP header
@@ -51,7 +55,26 @@ function _M.validate_token()
         ngx.exit(403)
     end
     
-    -- Verify and decode JWT token
+    -- Create a cache key based on token hash and client info for security
+    local cache_key = "jwt:" .. ngx.md5(token .. ":" .. client_ip .. ":" .. user_agent)
+    
+    -- Check if token is in cache and still valid
+    local cached_data = jwt_cache:get(cache_key)
+    if cached_data then
+        local cached_info = cjson.decode(cached_data)
+        local current_time = ngx.time()
+        
+        -- Check if cached token hasn't expired
+        if cached_info.exp and current_time <= cached_info.exp then
+            ngx.log(ngx.INFO, "JWT token validated from cache for IP: " .. client_ip)
+            return -- Token is valid and cached, allow access
+        else
+            -- Remove expired token from cache
+            jwt_cache:delete(cache_key)
+        end
+    end
+    
+    -- Token not in cache or expired, perform full validation
     local jwt_obj = jwt:verify(JWT_SECRET, token)
     
     if not jwt_obj.valid then
@@ -71,8 +94,24 @@ function _M.validate_token()
         ngx.say("Access denied: Token expired")
         ngx.exit(403)
     end
-
     
+    -- Token is valid, cache it for future requests
+    local cache_data = {
+        exp = payload.exp,
+        cached_at = current_time
+    }
+    
+    -- Set cache TTL to the minimum of JWT expiry and our cache TTL
+    local cache_ttl = JWT_CACHE_TTL
+    if payload.exp then
+        cache_ttl = math.min(cache_ttl, payload.exp - current_time)
+    end
+    
+    -- Only cache if TTL is positive
+    if cache_ttl > 0 then
+        jwt_cache:set(cache_key, cjson.encode(cache_data), cache_ttl)
+        ngx.log(ngx.INFO, "JWT token cached for " .. cache_ttl .. " seconds for IP: " .. client_ip)
+    end
 
 end
 
